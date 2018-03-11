@@ -341,5 +341,6 @@ test_user_file = "./data/dataset/ciao/test/test_user.pkl"
 if __name__ == "__main__":
     initial_data(out_rating_file,out_trust_file,train_user_file,train_item_degree,test_user_file,
                  train_edges_1,train_edges_2)
+#     asd
 
 
