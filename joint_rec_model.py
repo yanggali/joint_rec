@@ -15,8 +15,8 @@ reg1 = reg2 = 0.1
 gama = 1
 lower_bound = 0.1
 reg = 0.1
-ITER_NUM = 10
-sample_T = 100000
+ITER_ROUND = 10
+sample_T = 1000000
 
 # all vertices set
 all_user_v = set()
@@ -73,16 +73,18 @@ user_user_view2 = pk.load(open(train_user_p_relation,'rb'))
 view_iter_num = max(len(user_user_view1),len(user_user_view2))
 user_friend_edges = pk.load(open(train_user_friend_edges,'rb'))
 user_item_edges = pk.load(open(train_user_item_edges,'rb'))
-# link_iter_num = max(len(user_friend_edges),len(user_item_edges))
-link_iter_num = 10000
+print("user friend edges len: %d, user item edges len: %d" % (len(user_friend_edges),len(user_item_edges)))
+link_iter_num = 100000
 print("link edges' len: %d" % link_iter_num)
 print("input dataset finished")
 
 # 获取二部图用户的邻居，朋友的度数，朋友列表，（所有边）
 view1_user_nei,view1_friend_degree,view1_friend_list = initial_negtable_data(user_user_view1)
 view2_user_nei,view2_friend_degree,view2_friend_list = initial_negtable_data(user_user_view2)
-user_nei,friend_degree,friend_list,all_user_set = initial_realedges_data(user_friend_edges)
-item_nei,item_degree,item_list,all_item_set = initial_realedges_data(user_item_edges)
+user_nei,friend_degree,friend_list,user_set1,friend_set = initial_realedges_data(user_friend_edges)
+item_nei,item_degree,item_list,user_set2,item_set = initial_realedges_data(user_item_edges)
+all_user_set = user_set1 | user_set2 | friend_set
+all_item_set = item_set
 view1_user_list = list(view1_user_nei.keys())
 view2_user_list = list(view2_user_nei.keys())
 
@@ -328,6 +330,11 @@ def train_user_user_relation():
     t = draw_tuple(user_friend_edges)
     v1 = t[0]
     v2 = t[1]
+    if math.isnan(-user_emb.get(v1).dot(user_emb.get(v2))):
+        print(v1)
+        print(user_emb.get(v1))
+        print(v2)
+        print(user_emb.get(v2))
     bias_v1v2 = sigmoid(-user_emb.get(v1).dot(user_emb.get(v2)))
     if (v1 in user_social_emb and v1 in user_prefer_emb) and (v2 in user_social_emb and v2 in user_prefer_emb):
         v1_w1 = user_weight_dict.get(v1).get("view1")
@@ -361,7 +368,7 @@ def train_user_item_relation():
     t = draw_tuple(user_item_edges)
     user = t[0]
     item = t[1]
-    bias_uv = (train_user.get(user).get(item)/5)*sigmoid(-user_emb.get(user).dot(user_item_map_matrix).dot(item_emb.get(item)))
+    bias_uv = (train_user.get(user).get("item").get(item)/5)*sigmoid(-user_emb.get(user).dot(user_item_map_matrix).dot(item_emb.get(item)))
     if user in user_social_emb and user in user_prefer_emb:
         v1_w1 = user_weight_dict.get(user).get("view1")
         v1_w2 = user_weight_dict.get(user).get("view2")
@@ -399,19 +406,18 @@ def train_data():
     iter = 0
     last_count = 0
     current_sample_count = 0
-    while iter <= ITER_NUM:
-        if iter - last_count > 10000:
-            current_sample_count += iter - last_count
-            last_count = iter
-            lr = init_lr * (1 - current_sample_count / (1.0 * (view_iter_num + 1)))
-            print("Iteration i:   " + str(iter) + "   ##########lr  " + str(lr))
-            if lr < init_lr * 0.0001:
-                lr = init_lr * 0.0001
-
+    while iter <= ITER_ROUND:
         # 更新两个view中的节点
         # 随机选择一个view更新user emb和user context emb
         view_iter = 0
         while view_iter < sample_T:
+            if view_iter - last_count > 10000:
+                current_sample_count += iter - last_count
+                last_count = view_iter
+                lr = init_lr * (1 - current_sample_count / (1.0 * (view_iter_num + 1)))
+                print("Iteration i:   " + str(iter) + "   ##########lr  " + str(lr))
+                if lr < init_lr * 0.0001:
+                    lr = init_lr * 0.0001
             # social user user relation
             training_user_in_view(1)
             # preference user user relation
@@ -429,9 +435,9 @@ def train_data():
                 print("real edge iter %d finished." % link_iter)
             link_iter += 1
         # write embedding into file
-        emb_to_file(out_user + "_r" + str(reg) + "N" + str(NEG_N) + "_" + str(iter), user_emb)
-        emb_to_file(out_item + "_r" + str(reg) + "N" + str(NEG_N) + "_" + str(iter), item_emb)
-        pk.dump(user_item_map_matrix,open(out_uv_matrix+ "_r" + str(reg) + "N" + str(NEG_N) + "_" + str(iter)+".pkl",'wb'))
+        emb_to_file(out_user + "_r" + str(reg) + "N" + str(NEG_N) + "_round"+str(iter), user_emb)
+        emb_to_file(out_item + "_r" + str(reg) + "N" + str(NEG_N) + "_round" + str(iter), item_emb)
+        pk.dump(user_item_map_matrix,open(out_uv_matrix+ "_r" + str(reg) + "N" + str(NEG_N) + "_round" + str(iter)+".pkl",'wb'))
         print("Round i:  %d finished." % iter)
         iter += 1
 

@@ -208,20 +208,21 @@ def initial_negtable_data(user_user_view):
 def initial_realedges_data(user_user_view):
     user_nei = dict()
     neg_vertices_degree = dict()
-    all_vertices_set = set()
+    vertices1_set = set()
+    vertices2_set = set()
     for t in user_user_view:
-        if t[0] not in all_vertices_set:
-            all_vertices_set.add(t[0])
+        if t[0] not in vertices1_set:
+            vertices1_set.add(t[0])
         if t[0] not in user_nei:
             user_nei[t[0]] = list()
         user_nei[t[0]].append(t[1])
-        if t[1] not in all_vertices_set:
-            all_vertices_set.add(t[1])
+        if t[1] not in vertices2_set:
+            vertices2_set.add(t[1])
         if t[1] not in neg_vertices_degree:
             neg_vertices_degree[t[1]] = 0
         neg_vertices_degree[t[1]] += 1
     neg_vertices_list = list(neg_vertices_degree.keys())
-    return user_nei,neg_vertices_degree,neg_vertices_list,all_vertices_set
+    return user_nei,neg_vertices_degree,neg_vertices_list,vertices1_set,vertices2_set
 
 
 # prepare data for train model
