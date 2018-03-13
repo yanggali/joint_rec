@@ -16,7 +16,7 @@ gama = 1
 lower_bound = 0.1
 reg = 0.1
 ITER_NUM = 10
-sample_T = 10000000
+sample_T = 100000
 
 # all vertices set
 all_user_v = set()
@@ -59,12 +59,13 @@ train_user_s_relation = "./data/dataset/ciao/train/train_user_social_view.pkl"
 train_user_p_relation = "./data/dataset/ciao/train/train_user_pre_view.pkl"
 # train_user_s_relation = "./data/dataset/ciao/train/sample_train_user_social_view.pkl"
 # train_user_p_relation = "./data/dataset/ciao/train/sample_train_user_pre_view.pkl"
-train_user_friend_edges = "./data/dataset/ciao/train/train_edges_1.pkl"
-train_user_item_edges = "./data/dataset/ciao/train/train_edges_2.pkl"
+train_user_item_edges = "./data/dataset/ciao/train/train_edges_1.pkl"
+train_user_friend_edges = "./data/dataset/ciao/train/train_edges_2.pkl"
 test_user_file = "./data/dataset/ciao/test/test_user.pkl"
 # output file
 out_user = "./data/dataset/ciao/output/user"
 out_item = "./data/dataset/ciao/output/item"
+out_uv_matrix = "./data/dataset/ciao/output/matrix"
 # initial two views and two realtions
 train_user = pk.load(open(train_user_file,'rb'))
 user_user_view1 = pk.load(open(train_user_s_relation,'rb'))
@@ -72,7 +73,9 @@ user_user_view2 = pk.load(open(train_user_p_relation,'rb'))
 view_iter_num = max(len(user_user_view1),len(user_user_view2))
 user_friend_edges = pk.load(open(train_user_friend_edges,'rb'))
 user_item_edges = pk.load(open(train_user_item_edges,'rb'))
-link_iter_num = max(len(user_friend_edges),len(user_item_edges))
+# link_iter_num = max(len(user_friend_edges),len(user_item_edges))
+link_iter_num = 10000
+print("link edges' len: %d" % link_iter_num)
 print("input dataset finished")
 
 # 获取二部图用户的邻居，朋友的度数，朋友列表，（所有边）
@@ -183,6 +186,7 @@ def init_all_vec():
     init_vec(all_item_set,item_emb)
     emb_to_file(out_user+"_r"+str(reg)+"N"+str(NEG_N)+"_init", user_emb)
     emb_to_file(out_item+"_r"+str(reg)+"N"+str(NEG_N)+"_init", item_emb)
+    pk.dump(user_item_map_matrix, open(out_uv_matrix+"_r"+str(reg)+"N"+str(NEG_N)+"_init.pkl", 'wb'))
 
 
 def init_sigmod_table():
@@ -236,29 +240,42 @@ def update_user_friend(source, target, weight,neg_vertices,type):
         for i in range(M):
             update_user_friend_vertex(source, neg_vertices[i], weight,error, 0,type)
 
-    w1 = user_weight_dict[source]["view1"]
-    w2 = user_weight_dict[source]["view2"]
-    lamda1 = w1/(w1+w2)
-    lamda2 = w2/(w1+w2)
     if type == 1:
-        if (source, target) in user_friend_edges:
-            source_error = lr * user_emb.get(target) * lamda1
+        if source in all_user_set and target in all_user_set:
+            w1 = user_weight_dict[source]["view1"]
+            w2 = user_weight_dict[source]["view2"]
+            lamda1 = w1 / (w1 + w2)
+            lamda2 = w2 / (w1 + w2)
+            source_error = lr * (1 - sigmoid(user_emb.get(source).dot(user_emb.get(target)))) * user_emb.get(
+                target) * lamda1
+            # 正则项
+            default_emb = np.zeros(DIM, )
+            reg_part_error = lr * 2 * reg * (
+                        lamda1 * (1 - lamda1) * (user_social_emb.get(source) - user_emb.get(source)) -
+                        lamda2 * lamda1 * (user_prefer_emb.get(source, default_emb) - user_emb.get(source)))
         else:
             source_error = 0
-        # 正则项
-        default_emb = np.zeros(DIM,)
-        reg_part_error = lr*2*reg*(lamda1*(1-lamda1)*(user_social_emb.get(source)-user_emb.get(source))-
-                                           lamda2*lamda1*(user_prefer_emb.get(source,default_emb) - user_emb.get(source)))
+            reg_part_error = 0
+
         user_social_emb[source] = user_social_emb.get(source) + error + source_error + reg_part_error
     else:
-        if (source, target) in user_friend_edges:
-            source_error = lr * user_emb.get(target) * lamda2
+        # 正则项
+        if source in all_user_set and target in all_user_set:
+            w1 = user_weight_dict[source]["view1"]
+            w2 = user_weight_dict[source]["view2"]
+            lamda1 = w1 / (w1 + w2)
+            lamda2 = w2 / (w1 + w2)
+            source_error = lr * (1 - sigmoid(user_emb.get(source).dot(user_emb.get(target)))) *\
+                           user_emb.get(target) * lamda2
+            # 正则项
+            default_emb = np.zeros(DIM, )
+            reg_part_error = lr * 2 * reg * (
+                        lamda2 * (1 - lamda2) * (user_prefer_emb.get(source) - user_emb.get(source)) -
+                        lamda1 * lamda2 * (user_social_emb.get(source, default_emb) - user_emb.get(source)))
         else:
             source_error = 0
-        # 正则项
-        default_emb = np.zeros(DIM, )
-        reg_part_error = lr * 2 * reg * (lamda2 * (1 - lamda2)* (user_prefer_emb.get(source) - user_emb.get(source)) -
-                                                        lamda1* lamda2* (user_social_emb.get(source,default_emb) - user_emb.get(source)))
+            reg_part_error = 0
+
         user_prefer_emb[source] = user_prefer_emb.get(source) +error + source_error + reg_part_error
 
 
@@ -311,28 +328,29 @@ def train_user_user_relation():
     t = draw_tuple(user_friend_edges)
     v1 = t[0]
     v2 = t[1]
+    bias_v1v2 = sigmoid(-user_emb.get(v1).dot(user_emb.get(v2)))
     if (v1 in user_social_emb and v1 in user_prefer_emb) and (v2 in user_social_emb and v2 in user_prefer_emb):
         v1_w1 = user_weight_dict.get(v1).get("view1")
         v1_w2 = user_weight_dict.get(v1).get("view2")
         v2_w1 = user_weight_dict.get(v2).get("view1")
         v2_w2 = user_weight_dict.get(v2).get("view2")
         # 更新ui的weight
-        user_weight_dict[v1]["view1"] += lr*user_emb.get(v2)/((v1_w1+v1_w2)*(v1_w1+v1_w2))*\
+        user_weight_dict[v1]["view1"] += lr*bias_v1v2*user_emb.get(v2)/((v1_w1+v1_w2)*(v1_w1+v1_w2))*\
                                          (v1_w2*user_social_emb.get(v1)- user_prefer_emb.get(v1))
-        user_weight_dict[v1]["view2"] += lr * user_emb.get(v2)/((v1_w1 + v1_w2) * (v1_w1 + v1_w2))*\
+        user_weight_dict[v1]["view2"] += lr *bias_v1v2* user_emb.get(v2)/((v1_w1 + v1_w2) * (v1_w1 + v1_w2))*\
                                          (v1_w1 * user_prefer_emb.get(v1) - user_social_emb.get(v1))
         # 更新uj的weight
-        user_weight_dict[v2]["view1"] += lr * user_emb.get(v1)/((v2_w1 + v2_w2) * (v2_w1 + v2_w2)) * (
+        user_weight_dict[v2]["view1"] += lr * bias_v1v2*user_emb.get(v1)/((v2_w1 + v2_w2) * (v2_w1 + v2_w2)) * (
                                         v2_w2 * user_social_emb.get(v2) - user_prefer_emb.get(v2))
-        user_weight_dict[v2]["view2"] += lr * user_emb.get(v1)/((v2_w1 + v2_w2) * (v2_w1 + v2_w2)) * (
+        user_weight_dict[v2]["view2"] += lr * bias_v1v2*user_emb.get(v1)/((v2_w1 + v2_w2) * (v2_w1 + v2_w2)) * (
                                         v2_w1 * user_prefer_emb.get(v2) - user_social_emb.get(v2))
         user_emb[v1] = (user_weight_dict[v1]["view1"]*user_social_emb[v1] + user_weight_dict[v1]["view2"]*
                         user_prefer_emb[v1])/(user_weight_dict[v1]["view1"]+user_weight_dict[v1]["view2"])
         user_emb[v2] = (user_weight_dict[v2]["view1"] * user_social_emb[v2] + user_weight_dict[v2]["view2"] *
                         user_prefer_emb[v2]) / (user_weight_dict[v2]["view1"] + user_weight_dict[v2]["view2"])
     else:
-        new_user_v1 = user_emb.get(v1) + lr*user_emb[v2]
-        new_user_v2 = user_emb.get(v2) + lr*user_emb[v1]
+        new_user_v1 = user_emb.get(v1) + lr*bias_v1v2*user_emb[v2]
+        new_user_v2 = user_emb.get(v2) + lr*bias_v1v2*user_emb[v1]
         user_emb[v1] = new_user_v1
         user_emb[v2] = new_user_v2
 
@@ -343,28 +361,28 @@ def train_user_item_relation():
     t = draw_tuple(user_item_edges)
     user = t[0]
     item = t[1]
-    w = train_user.get(user).get(item) / 5
+    bias_uv = (train_user.get(user).get(item)/5)*sigmoid(-user_emb.get(user).dot(user_item_map_matrix).dot(item_emb.get(item)))
     if user in user_social_emb and user in user_prefer_emb:
         v1_w1 = user_weight_dict.get(user).get("view1")
         v1_w2 = user_weight_dict.get(user).get("view2")
         # 更新ui的weight
-        user_weight_dict[user]["view1"] += lr * item_emb.get(item).dot(user_item_map_matrix) / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2)) * \
+        user_weight_dict[user]["view1"] += lr * bias_uv*item_emb.get(item).dot(user_item_map_matrix) / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2)) * \
                                          (v1_w2 * user_social_emb.get(user) - user_prefer_emb.get(user))
-        user_weight_dict[user]["view2"] += lr * item_emb.get(item).dot(user_item_map_matrix) / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2)) * \
+        user_weight_dict[user]["view2"] += lr * bias_uv*item_emb.get(item).dot(user_item_map_matrix) / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2)) * \
                                          (v1_w1 * user_prefer_emb.get(user) - user_social_emb.get(user))
         # 更新vj的embedding
-        new_item_emb = item_emb.get(item) + lr*w*user_emb.get(user).dot(user_item_map_matrix)
+        new_item_emb = item_emb.get(item) + lr*bias_uv*user_emb.get(user).dot(user_item_map_matrix)
         # 更新map_matrix
-        user_item_map_matrix += lr*w*user_emb[user].reshape(DIM,1).dot(item_emb[item].reshape(1,DIM))
+        user_item_map_matrix += lr*bias_uv*user_emb[user].reshape(DIM,1).dot(item_emb[item].reshape(1,DIM))
         # 更新vj的embedding
         item_emb[item] = new_item_emb
         # 更新ui的embedding
         user_emb[user] = (user_weight_dict[user]["view1"]*user_social_emb[user] + user_weight_dict[user]["view2"]*
                         user_prefer_emb[user])/(user_weight_dict[user]["view1"]+user_weight_dict[user]["view2"])
     else:
-        new_user_emb = user_emb.get(user) + lr*w*user_item_map_matrix.dot(item_emb.get(item))
-        new_item_emb = item_emb.get(item) + lr*w*user_item_map_matrix.dot(user_emb.get(user))
-        user_item_map_matrix += lr*w*user_emb[user].reshape(DIM,1).dot(item_emb[item].reshape(1,DIM))
+        new_user_emb = user_emb.get(user) + lr*bias_uv*user_item_map_matrix.dot(item_emb.get(item))
+        new_item_emb = item_emb.get(item) + lr*bias_uv*user_item_map_matrix.dot(user_emb.get(user))
+        user_item_map_matrix += lr*bias_uv*user_emb[user].reshape(DIM,1).dot(item_emb[item].reshape(1,DIM))
         user_emb[user] = new_user_emb
         item_emb[item] = new_item_emb
 
@@ -413,6 +431,7 @@ def train_data():
         # write embedding into file
         emb_to_file(out_user + "_r" + str(reg) + "N" + str(NEG_N) + "_" + str(iter), user_emb)
         emb_to_file(out_item + "_r" + str(reg) + "N" + str(NEG_N) + "_" + str(iter), item_emb)
+        pk.dump(user_item_map_matrix,open(out_uv_matrix+ "_r" + str(reg) + "N" + str(NEG_N) + "_" + str(iter)+".pkl",'wb'))
         print("Round i:  %d finished." % iter)
         iter += 1
 
@@ -427,3 +446,4 @@ if __name__ == "__main__":
     print("training finished")
     emb_to_file(out_user+"_finished", user_emb)
     emb_to_file(out_item+"_finished", item_emb)
+    pk.dump(user_item_map_matrix, open(out_uv_matrix+"_finished.pkl", 'wb'))
