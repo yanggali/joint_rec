@@ -7,9 +7,9 @@ import numpy as np
 import pickle as pk
 
 test_user_file = "./data/dataset/ciao/test/test_user.pkl"
-user_emb_file = "./data/dataset/ciao/output/user_r0.1N2_init"
-item_emb_file = "./data/dataset/ciao/output/item_r0.1N2_init"
-map_matrix_file = "./data/dataset/ciao/output/matrix_r0.1N2_init.pkl"
+user_emb_file = "./data/dataset/ciao/output/user_r0.1N2_round1"
+item_emb_file = "./data/dataset/ciao/output/item_r0.1N2_round1"
+map_matrix_file = "./data/dataset/ciao/output/matrix_r0.1N2_round1.pkl"
 
 DIM = 50
 

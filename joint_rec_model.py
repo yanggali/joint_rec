@@ -74,11 +74,11 @@ view_iter_num = max(len(user_user_view1),len(user_user_view2))
 user_friend_edges = pk.load(open(train_user_friend_edges,'rb'))
 user_item_edges = pk.load(open(train_user_item_edges,'rb'))
 print("user friend edges len: %d, user item edges len: %d" % (len(user_friend_edges),len(user_item_edges)))
-link_iter_num = 100000
+link_iter_num = 50000
 print("link edges' len: %d" % link_iter_num)
 print("input dataset finished")
 
-# 获取二部图用户的邻居，朋友的度数，朋友列表，（所有边）
+
 view1_user_nei,view1_friend_degree,view1_friend_list = initial_negtable_data(user_user_view1)
 view2_user_nei,view2_friend_degree,view2_friend_list = initial_negtable_data(user_user_view2)
 user_nei,friend_degree,friend_list,user_set1,friend_set = initial_realedges_data(user_friend_edges)
@@ -175,16 +175,16 @@ def init_user_weight(users_at_group, user_weight):
 
 # initial vertices' embedding
 def init_all_vec():
-    # 初始化user的context embedding
+    # initialize users' context embedding
     init_vec(view1_friend_list, user_context_emb)
     init_vec(view2_friend_list, user_context_emb)
-    # 初始化view1和view2中user的embedding
+    # initialize view1 and view2's user embedding
     init_vec(view1_user_list,user_social_emb)
     init_vec(view2_user_list,user_prefer_emb)
-    # 初始化user的embeddding，根据两种view的user加权和
+    # initialize users' embeddding
     init_user_view_weight(all_user_set,user_weight_dict)
     init_user(all_user_set, user_emb)
-    # 初始化item的embedding
+    # initialize items' embedding
     init_vec(all_item_set,item_emb)
     emb_to_file(out_user+"_r"+str(reg)+"N"+str(NEG_N)+"_init", user_emb)
     emb_to_file(out_item+"_r"+str(reg)+"N"+str(NEG_N)+"_init", item_emb)
@@ -250,7 +250,7 @@ def update_user_friend(source, target, weight,neg_vertices,type):
             lamda2 = w2 / (w1 + w2)
             source_error = lr * (1 - sigmoid(user_emb.get(source).dot(user_emb.get(target)))) * user_emb.get(
                 target) * lamda1
-            # 正则项
+            # reg part
             default_emb = np.zeros(DIM, )
             reg_part_error = lr * 2 * reg * (
                         lamda1 * (1 - lamda1) * (user_social_emb.get(source) - user_emb.get(source)) -
@@ -261,7 +261,7 @@ def update_user_friend(source, target, weight,neg_vertices,type):
 
         user_social_emb[source] = user_social_emb.get(source) + error + source_error + reg_part_error
     else:
-        # 正则项
+        # reg part
         if source in all_user_set and target in all_user_set:
             w1 = user_weight_dict[source]["view1"]
             w2 = user_weight_dict[source]["view2"]
@@ -269,7 +269,7 @@ def update_user_friend(source, target, weight,neg_vertices,type):
             lamda2 = w2 / (w1 + w2)
             source_error = lr * (1 - sigmoid(user_emb.get(source).dot(user_emb.get(target)))) *\
                            user_emb.get(target) * lamda2
-            # 正则项
+            # reg part
             default_emb = np.zeros(DIM, )
             reg_part_error = lr * 2 * reg * (
                         lamda2 * (1 - lamda2) * (user_prefer_emb.get(source) - user_emb.get(source)) -
@@ -325,7 +325,6 @@ def training_user_in_view(type):
         neg_sample_user_friend(v1, v2, w, view2_user_nei, view2_friend_list, view2_friend_neg_table,type)
 
 
-# 训练user-friend关系,更新user的两个view的weight
 def train_user_user_relation():
     t = draw_tuple(user_friend_edges)
     v1 = t[0]
@@ -341,16 +340,18 @@ def train_user_user_relation():
         v1_w2 = user_weight_dict.get(v1).get("view2")
         v2_w1 = user_weight_dict.get(v2).get("view1")
         v2_w2 = user_weight_dict.get(v2).get("view2")
-        # 更新ui的weight
-        user_weight_dict[v1]["view1"] += lr*bias_v1v2*user_emb.get(v2)/((v1_w1+v1_w2)*(v1_w1+v1_w2))*\
-                                         (v1_w2*user_social_emb.get(v1)- user_prefer_emb.get(v1))
-        user_weight_dict[v1]["view2"] += lr *bias_v1v2* user_emb.get(v2)/((v1_w1 + v1_w2) * (v1_w1 + v1_w2))*\
-                                         (v1_w1 * user_prefer_emb.get(v1) - user_social_emb.get(v1))
-        # 更新uj的weight
-        user_weight_dict[v2]["view1"] += lr * bias_v1v2*user_emb.get(v1)/((v2_w1 + v2_w2) * (v2_w1 + v2_w2)) * (
-                                        v2_w2 * user_social_emb.get(v2) - user_prefer_emb.get(v2))
-        user_weight_dict[v2]["view2"] += lr * bias_v1v2*user_emb.get(v1)/((v2_w1 + v2_w2) * (v2_w1 + v2_w2)) * (
-                                        v2_w1 * user_prefer_emb.get(v2) - user_social_emb.get(v2))
+        # update v1 weight
+        user_weight_dict[v1]["view1"] += lr*bias_v1v2*(user_emb.get(v2)*v1_w2/((v1_w1+v1_w2)*(v1_w1+v1_w2))).dot\
+                                         (user_social_emb.get(v1)- user_prefer_emb.get(v1))
+        user_weight_dict[v1]["view2"] += lr *bias_v1v2* (user_emb.get(v2)*v1_w1/((v1_w1 + v1_w2) * (v1_w1 + v1_w2))).dot\
+                                         (user_prefer_emb.get(v1) - user_social_emb.get(v1))
+        # update v2 weight
+        user_weight_dict[v2]["view1"] += lr * bias_v1v2*(user_emb.get(v1)*v2_w2/((v2_w1 + v2_w2) * (v2_w1 + v2_w2))).dot (
+                                         user_social_emb.get(v2) - user_prefer_emb.get(v2))
+        user_weight_dict[v2]["view2"] += lr * bias_v1v2*(user_emb.get(v1)*v2_w1/((v2_w1 + v2_w2) * (v2_w1 + v2_w2))).dot (
+                                        user_prefer_emb.get(v2) - user_social_emb.get(v2))
+        print("v1 weight1:")
+        print(user_weight_dict[v1]["view1"])
         user_emb[v1] = (user_weight_dict[v1]["view1"]*user_social_emb[v1] + user_weight_dict[v1]["view2"]*
                         user_prefer_emb[v1])/(user_weight_dict[v1]["view1"]+user_weight_dict[v1]["view2"])
         user_emb[v2] = (user_weight_dict[v2]["view1"] * user_social_emb[v2] + user_weight_dict[v2]["view2"] *
@@ -362,7 +363,6 @@ def train_user_user_relation():
         user_emb[v2] = new_user_v2
 
 
-# 训练user-item关系
 def train_user_item_relation():
     global user_item_map_matrix
     t = draw_tuple(user_item_edges)
@@ -372,18 +372,21 @@ def train_user_item_relation():
     if user in user_social_emb and user in user_prefer_emb:
         v1_w1 = user_weight_dict.get(user).get("view1")
         v1_w2 = user_weight_dict.get(user).get("view2")
-        # 更新ui的weight
-        user_weight_dict[user]["view1"] += lr * bias_uv*item_emb.get(item).dot(user_item_map_matrix) / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2)) * \
-                                         (v1_w2 * user_social_emb.get(user) - user_prefer_emb.get(user))
-        user_weight_dict[user]["view2"] += lr * bias_uv*item_emb.get(item).dot(user_item_map_matrix) / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2)) * \
-                                         (v1_w1 * user_prefer_emb.get(user) - user_social_emb.get(user))
-        # 更新vj的embedding
+        # update v1 weight
+        user_weight_dict[user]["view1"] += lr * bias_uv*(item_emb.get(item).dot(user_item_map_matrix)*v1_w2 / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2))).dot \
+                                         ( user_social_emb.get(user) - user_prefer_emb.get(user))
+        user_weight_dict[user]["view2"] += lr * bias_uv*(item_emb.get(item).dot(user_item_map_matrix)*v1_w1 / ((v1_w1 + v1_w2) * (v1_w1 + v1_w2))).dot \
+                                         (user_prefer_emb.get(user) - user_social_emb.get(user))
+        print("user weight2:")
+        print(user_weight_dict[user]["view2"])
+        #print("v1 weight1 : %f, v1 weight1: %f" % (user_weight_dict[v1]["view1"], user_weight_dict[v1]["view2"]))
+        # update vj embedding
         new_item_emb = item_emb.get(item) + lr*bias_uv*user_emb.get(user).dot(user_item_map_matrix)
-        # 更新map_matrix
+        # update map_matrix
         user_item_map_matrix += lr*bias_uv*user_emb[user].reshape(DIM,1).dot(item_emb[item].reshape(1,DIM))
-        # 更新vj的embedding
+        # update vj embedding
         item_emb[item] = new_item_emb
-        # 更新ui的embedding
+        # update ui embedding
         user_emb[user] = (user_weight_dict[user]["view1"]*user_social_emb[user] + user_weight_dict[user]["view2"]*
                         user_prefer_emb[user])/(user_weight_dict[user]["view1"]+user_weight_dict[user]["view2"])
     else:
@@ -407,8 +410,6 @@ def train_data():
     last_count = 0
     current_sample_count = 0
     while iter <= ITER_ROUND:
-        # 更新两个view中的节点
-        # 随机选择一个view更新user emb和user context emb
         view_iter = 0
         while view_iter < sample_T:
             if view_iter - last_count > 10000:
@@ -425,8 +426,8 @@ def train_data():
             if view_iter%10000 == 0:
                 print("view iter %d finished." % view_iter)
             view_iter += 1
-        # 更新真实的user-user和user-item节点
-        # 随机选择user-friend图或者user-item图
+        # update by real links
+
         link_iter = 0
         while link_iter < link_iter_num:
             train_user_user_relation()
