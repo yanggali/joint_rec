@@ -225,19 +225,14 @@ def sigmoid(x):
 def update_user_friend_vertex(source, target, weight, error, label, type):
     if type == 1:
         source_emb = user_social_emb.get(source)
-        target_emb = user_social_emb.get(target)
     else:
         source_emb = user_prefer_emb.get(source)
-        target_emb = user_prefer_emb.get(target)
+    target_emb = user_context_emb.get(target)
     score = sigmoid(math.pow(-1, label) * source_emb.dot(target_emb))
-    g = weight * math.pow(-1, label + 1) * score * implicit_lr
+    g = implicit_lr * weight * math.pow(-1, label + 1) * score
     # total error for source vertex
     error += g * target_emb
-    new_vec = target_emb + g * source_emb
-    if type == 1:
-        user_social_emb[target] = new_vec
-    else:
-        user_prefer_emb[target] = new_vec
+    user_context_emb[target] = target_emb + g * source_emb
 
 
 # update vertices according to an edge
@@ -254,7 +249,6 @@ def update_user_friend(source, target, weight, neg_vertices, type):
             w1 = user_weight_dict[source]["view1"]
             w2 = user_weight_dict[source]["view2"]
             lamda1 = w1 / (w1 + w2)
-            lamda2 = w2 / (w1 + w2)
             uu_error = implicit_lr * (1 - sigmoid(user_emb.get(source).dot(user_user_map_matrix).dot(user_emb.get(target)))) * user_user_map_matrix.dot(user_emb.get(
                 target)) * lamda1
             # reg part
@@ -263,7 +257,7 @@ def update_user_friend(source, target, weight, neg_vertices, type):
             uu_error = 0
             reg_part_error = 0
         # u^s_i
-        user_social_emb[source] = user_social_emb.get(source) + error - reg_part_error#+ uu_error
+        user_social_emb[source] = user_social_emb.get(source) + error - reg_part_error+ uu_error
 
     # uodate u_p
     else:
@@ -276,13 +270,12 @@ def update_user_friend(source, target, weight, neg_vertices, type):
             uu_error = implicit_lr * (1 - sigmoid(user_emb.get(source).dot(user_user_map_matrix).dot(user_emb.get(target)))) * \
                        user_user_map_matrix.dot(user_emb.get(target)) * lamda2
             # reg part
-            default_emb = np.zeros(DIM, )
             reg_part_error = implicit_lr * reg* 2*lamda2 * (user_prefer_emb.get(source) - user_emb.get(source))
         else:
             uu_error = 0
             reg_part_error = 0
 
-        user_prefer_emb[source] = user_prefer_emb.get(source) + error - reg_part_error#+ uu_error
+        user_prefer_emb[source] = user_prefer_emb.get(source) + error - reg_part_error+ uu_error
 
 
 # fix source, sample targets

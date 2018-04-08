@@ -6,10 +6,20 @@ import pandas as pd
 import numpy as np
 import pickle as pk
 
+round = 8
 test_user_file = "./data/dataset/ciao/test/test_user.pkl"
-user_emb_file = "./data/dataset/ciao/output/user_r0.1N2_init"
+user_emb_file = "./data/dataset/ciao/output/user_r0.1N2_round{}".format(round)
+#item_emb_file = "./data/dataset/ciao/output/item_r0.1N2_round{}".format(round)
 item_emb_file = "./data/dataset/ciao/output/item_r0.1N2_init"
-map_matrix_file = "./data/dataset/ciao/output/matrix_r0.1N2_init.pkl"
+user_user_map_matrix_file = "./data/dataset/ciao/output/matrix_uu_r0.1N2_round{}.pkl".format(round)
+#user_item_map_matrix_file = "./data/dataset/ciao/output/matrix_uv_r0.1N2_round{}.pkl".format(round)
+user_item_map_matrix_file = "./data/dataset/ciao/output/matrix_uv_r0.1N2_init.pkl"
+# iter_time = 1832176
+# user_emb_file = "./data/baseline/ciao/joint_model/user{}".format(iter_time)
+# item_emb_file = "./data/baseline/ciao/joint_model/item{}".format(iter_time)
+# user_user_map_matrix_file = "./data/baseline/ciao/joint_model/matrix_uu{}.pkl".format(iter_time)
+# user_item_map_matrix_file = "./data/baseline/ciao/joint_model/matrix_uv{}.pkl".format(iter_time)
+
 
 DIM = 50
 
@@ -24,7 +34,8 @@ def get_emb(vertex_emb_file):
 
 user_emb = get_emb(user_emb_file)
 item_emb = get_emb(item_emb_file)
-map_matrix = pk.load(open(map_matrix_file,'rb'))
+user_map_matrix = pk.load(open(user_user_map_matrix_file,'rb'))
+item_map_matrix = pk.load(open(user_item_map_matrix_file,'rb'))
 print("user len:%d, item len:%d" % (len(user_emb),len(item_emb)))
 print("load file finished")
 
@@ -34,10 +45,10 @@ def cal_user_friend_topk(user,friend,candi_list):
     target_user_emb = user_emb.get(user)
     friend_emb = user_emb.get(friend)
     rec_friends_dict = dict()
-    rec_friends_dict[friend] = target_user_emb.dot(friend_emb)
+    rec_friends_dict[friend] = target_user_emb.dot(user_map_matrix).dot(friend_emb)
     for candi in candi_list:
         if candi in user_emb:
-            rec_friends_dict[candi] = target_user_emb.dot(user_emb.get(candi))
+            rec_friends_dict[candi] = target_user_emb.dot(user_map_matrix).dot(user_emb.get(candi))
     # sort recommendation list
     sorted_rec_friends_dict = sorted(rec_friends_dict.items(), key=lambda d: d[1], reverse=True)
     user_k_map = dict()
@@ -60,10 +71,10 @@ def cal_user_item_topk(user,item,candi_list):
     target_user_emb = user_emb.get(user)
     target_item_emb = item_emb.get(item)
     rec_items_dict = dict()
-    rec_items_dict[item] = target_user_emb.dot(map_matrix).dot(target_item_emb)
+    rec_items_dict[item] = target_user_emb.dot(item_map_matrix).dot(target_item_emb)
     for candi in candi_list:
         if candi in item_emb:
-            rec_items_dict[candi] = target_user_emb.dot(map_matrix).dot(item_emb.get(candi))
+            rec_items_dict[candi] = target_user_emb.dot(item_map_matrix).dot(item_emb.get(candi))
     # sort recommendation list
     sorted_rec_items_dict = sorted(rec_items_dict.items(), key=lambda d: d[1], reverse=True)
     user_k_map = dict()
@@ -117,10 +128,11 @@ if __name__ == "__main__":
                 item_MRR += rr
 
     print("friend lost num:%d, item lost num:%d" % (friend_lost,item_lost))
+    print("friend evaluation")
     for k in top_k:
-        print("friend hit@%d is %f" % (k,friends_hit_at_k_map[k]/(pos_friend_num)))
-    print("friend mrr is:%f" % (friend_MRR / pos_friend_num))
-
+        print("%f" % (friends_hit_at_k_map[k]/(pos_friend_num)))
+    print("%f" % (friend_MRR / pos_friend_num))
+    print("item evaluation")
     for k in top_k:
-        print("item hit@%d is %f" % (k,items_hit_at_k_map[k]/(pos_item_num)))
-    print("item mrr is:%f" % (item_MRR / pos_item_num))
+        print("%f" % (items_hit_at_k_map[k]/(pos_item_num)))
+    print("%f" % (item_MRR / pos_item_num))
